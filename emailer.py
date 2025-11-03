@@ -25,7 +25,8 @@ def send_mail(to_addrs: List[str], subject: str, body: str, attachments: List[Tu
         part = MIMEBase(main, sub)
         part.set_payload(data)
         encoders.encode_base64(part)
-        part.add_header("Content-Disposition", f"attachment; filename="{filename}"")
+        part.add_header("Content-Disposition", f'attachment; filename="{filename}"')
+
         msg.attach(part)
 
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
