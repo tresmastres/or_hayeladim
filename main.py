@@ -242,7 +242,7 @@ async def stripe_webhook(request: Request, session: Session = Depends(get_sessio
 
 from fastapi import APIRouter
 from sqlalchemy.orm import Session
-from database import SessionLocal, Invoice
+from database import SessionLocal
 
 router = APIRouter(prefix="/reports", tags=["Reports"])
 
