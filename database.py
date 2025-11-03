@@ -24,3 +24,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+class Bank(Base):
+    __tablename__ = "banks"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String, nullable=False)
+    numero_cuenta = Column(String, nullable=True)
+    swift = Column(String, nullable=True)
+    activo = Column(Boolean, default=True)
+
+
