@@ -262,3 +262,124 @@ def get_summary():
 
 app.include_router(router)
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import Session, select
+from database import engine  # o SessionLocal si lo usas
+# importa tus modelos existentes:
+# from models import Invoice, Member, ...
+# y los nuevos:
+from database import Banco, Cobro  # o desde models si los pusiste ahí
+
+def get_session():
+    with Session(engine) as session:
+        yield session
+
+api_bancos = APIRouter(prefix="/banks", tags=["Banks"])
+api_cobros = APIRouter(prefix="/payments", tags=["Payments"])
+api_reportes = APIRouter(prefix="/reports", tags=["Reports"])  # si aún no lo tenías
+api_members = APIRouter(prefix="/members", tags=["Members"])   # para estado de cuenta
+
+# --- BANCOS ---
+@api_bancos.get("", response_model=list[Banco])
+def list_bancos(session: Session = Depends(get_session)):
+    return session.exec(select(Banco).order_by(Banco.nombre)).all()
+
+@api_bancos.post("", response_model=Banco)
+def create_banco(data: Banco, session: Session = Depends(get_session)):
+    session.add(data)
+    session.commit()
+    session.refresh(data)
+    return data
+
+# --- COBROS ---
+class CobroIn(SQLModel):
+    invoice_id: int
+    amount_cents: int
+    metodo: str  # 'efectivo' | 'tpv' | 'transferencia'
+    banco_id: Optional[int] = None
+    fecha: Optional[date] = None
+
+@api_cobros.get("")
+def list_cobros(
+    invoice_id: Optional[int] = Query(default=None),
+    session: Session = Depends(get_session)
+):
+    q = select(Cobro)
+    if invoice_id:
+        q = q.where(Cobro.invoice_id == invoice_id)
+    return session.exec(q.order_by(Cobro.fecha.desc(), Cobro.id.desc())).all()
+
+@api_cobros.post("", status_code=201)
+def create_cobro(payload: CobroIn, session: Session = Depends(get_session)):
+    # validar factura
+    inv = session.exec(select(Invoice).where(Invoice.id == payload.invoice_id)).first()
+    if not inv:
+        raise HTTPException(404, "Invoice not found")
+
+    # crear cobro
+    cobro = Cobro(
+        invoice_id=payload.invoice_id,
+        amount_cents=payload.amount_cents,
+        metodo=payload.metodo,
+        banco_id=payload.banco_id,
+        fecha=payload.fecha or datetime.utcnow().date()
+    )
+    session.add(cobro)
+
+    # actualizar estado de factura según total cobrado
+    total_cobrado = (session.exec(
+        select(Cobro).where(Cobro.invoice_id == payload.invoice_id)
+    ).all() or [])
+    total_prev = sum(c.amount_cents for c in total_cobrado)
+    total_final = total_prev + payload.amount_cents
+
+    if total_final >= inv.amount_cents:
+        inv.status = "paid"
+    else:
+        # si quieres soportar 'partial', úsalo; si no, deja 'open'
+        inv.status = "partial"
+
+    session.add(inv)
+    session.commit()
+    session.refresh(cobro)
+    return {"ok": True, "payment_id": cobro.id, "invoice_status": inv.status}
+
+# --- ESTADO DE CUENTA DEL MIEMBRO ---
+@api_members.get("/{member_id}/account")
+def member_account(member_id: int, session: Session = Depends(get_session)):
+    # Facturas del miembro
+    invoices = session.exec(select(Invoice).where(Invoice.member_id == member_id)).all()
+    # Cobros de esas facturas
+    ids = [i.id for i in invoices]
+    cobros = []
+    if ids:
+        cobros = session.exec(select(Cobro).where(Cobro.invoice_id.in_(ids))).all()
+
+    # Mapear totales por factura
+    paid_map = {}
+    for c in cobros:
+        paid_map[c.invoice_id] = paid_map.get(c.invoice_id, 0) + c.amount_cents
+
+    data = []
+    for inv in invoices:
+        paid = paid_map.get(inv.id, 0)
+        balance = max(inv.amount_cents - paid, 0)
+        data.append({
+            "invoice_id": inv.id,
+            "full_number": getattr(inv, "full_number", None),
+            "issue_date": getattr(inv, "issue_date", None),
+            "amount_cents": inv.amount_cents,
+            "currency": inv.currency,
+            "status": inv.status,
+            "paid_cents": paid,
+            "balance_cents": balance,
+        })
+
+    return {"member_id": member_id, "invoices": data, "total_balance_cents": sum(d["balance_cents"] for d in data)}
+
+# Si aún no están incluidas:
+app.include_router(api_bancos)
+app.include_router(api_cobros)
+app.include_router(api_members)  # ya existirá; si no, inclúyelo
+
+
