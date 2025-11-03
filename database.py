@@ -1,6 +1,9 @@
 from sqlmodel import SQLModel, create_engine, Session
 import os
 
+from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy import Date
+
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./app.db")
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, echo=False, connect_args=connect_args)
