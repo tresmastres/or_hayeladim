@@ -268,7 +268,7 @@ from database import engine  # o SessionLocal si lo usas
 # importa tus modelos existentes:
 # from models import Invoice, Member, ...
 # y los nuevos:
-from database import Banco, Cobro  # o desde models si los pusiste ahí
+from database import Bank # o desde models si los pusiste ahí
 
 def get_session():
     with Session(engine) as session:
