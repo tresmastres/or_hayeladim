@@ -239,3 +239,26 @@ async def stripe_webhook(request: Request, session: Session = Depends(get_sessio
             session.add(don); session.commit()
 
     return {"received": True}
+
+from fastapi import APIRouter
+from sqlalchemy.orm import Session
+from database import SessionLocal, Invoice
+
+router = APIRouter(prefix="/reports", tags=["Reports"])
+
+@router.get("/summary")
+def get_summary():
+    db: Session = SessionLocal()
+    invoices = db.query(Invoice).all()
+    total_invoices_eur = sum(i.amount_cents for i in invoices if i.currency == "EUR") / 100
+    open_invoices = sum(1 for i in invoices if i.status == "open")
+    paid_invoices = sum(1 for i in invoices if i.status == "paid")
+    return {
+        "total_invoices_eur": total_invoices_eur,
+        "open_invoices": open_invoices,
+        "paid_invoices": paid_invoices,
+        "total_donations_eur": 0
+    }
+
+app.include_router(router)
+
