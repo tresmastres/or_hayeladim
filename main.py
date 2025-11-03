@@ -376,6 +376,23 @@ def member_account(member_id: int, session: Session = Depends(get_session)):
         })
 
     return {"member_id": member_id, "invoices": data, "total_balance_cents": sum(d["balance_cents"] for d in data)}
+# --- Bancos ---
+@app.get("/banks")
+def list_banks(db: Session = Depends(get_db)):
+    return db.query(Bank).all()
+
+@app.post("/banks")
+def create_bank(data: dict, db: Session = Depends(get_db)):
+    bank = Bank(
+        nombre=data["nombre"],
+        numero_cuenta=data.get("numero_cuenta"),
+        swift=data.get("swift"),
+        activo=data.get("activo", True)
+    )
+    db.add(bank)
+    db.commit()
+    db.refresh(bank)
+    return bank
 
 # Si aún no están incluidas:
 app.include_router(api_bancos)
