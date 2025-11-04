@@ -19,3 +19,7 @@ def init_db():
     with engine.begin() as conn:
         conn.execute(text(SQL))
     return {"ok": True, "message": "users table ready"}
+
+from app.routes import dev_init as dev_init_routes
+app.include_router(dev_init_routes.router)
+
